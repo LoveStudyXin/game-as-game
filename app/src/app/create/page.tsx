@@ -5,22 +5,14 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore, useCreationStore } from '@/lib/store';
 import PixelButton from '@/components/pixel/PixelButton';
 import PixelCard from '@/components/pixel/PixelCard';
-import StepGameStyle from '@/components/creation/StepGameStyle';
-import StepMechanic from '@/components/creation/StepMechanic';
-import StepWorld from '@/components/creation/StepWorld';
-import StepNarrative from '@/components/creation/StepNarrative';
-import StepExperience from '@/components/creation/StepExperience';
-import StepChaos from '@/components/creation/StepChaos';
-import StepPreview from '@/components/creation/StepPreview';
+import StepChooseWorld from '@/components/creation/StepChooseWorld';
+import StepDiscoverDNA from '@/components/creation/StepDiscoverDNA';
+import StepDNACard from '@/components/creation/StepDNACard';
 
 const STEP_LABELS = [
-  '游戏风格',
-  '核心机制',
-  '世界规则',
-  '叙事种子',
-  '体验参数',
-  '混沌注入',
-  '预览生成',
+  '选择你的世界',
+  '发现你的DNA',
+  '你的游戏DNA',
 ];
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
@@ -42,7 +34,7 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
             />
             {i < total - 1 && (
               <div
-                className={`w-2 sm:w-4 h-0.5 ${i < current ? 'bg-pixel-green' : 'bg-pixel-border'}`}
+                className={`w-3 sm:w-6 h-0.5 ${i < current ? 'bg-pixel-green' : 'bg-pixel-border'}`}
               />
             )}
           </React.Fragment>
@@ -78,13 +70,9 @@ export default function CreatePage() {
 
   const renderStep = () => {
     switch (step) {
-      case 0: return <StepGameStyle />;
-      case 1: return <StepMechanic />;
-      case 2: return <StepWorld />;
-      case 3: return <StepNarrative />;
-      case 4: return <StepExperience />;
-      case 5: return <StepChaos />;
-      case 6: return <StepPreview />;
+      case 0: return <StepChooseWorld />;
+      case 1: return <StepDiscoverDNA />;
+      case 2: return <StepDNACard />;
       default: return null;
     }
   };
@@ -95,13 +83,13 @@ export default function CreatePage() {
   return (
     <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
       <h1 className="font-pixel text-[11px] sm:text-[14px] text-pixel-gold text-center mb-1 sm:mb-2">
-        🔨 创造你的游戏
+        🧬 创造你的游戏
       </h1>
       <p className="font-pixel text-[6px] sm:text-[7px] text-[#aaaacc] text-center mb-4 sm:mb-6">
-        每一个选择都会影响最终的游戏世界
+        每一个回答都会融入你的游戏DNA
       </p>
 
-      <StepIndicator current={step} total={7} />
+      <StepIndicator current={step} total={3} />
 
       <PixelCard variant="default" className="mb-4 sm:mb-6">
         {renderStep()}
@@ -117,7 +105,7 @@ export default function CreatePage() {
           {step === 0 ? '← 返回首页' : '← 上一步'}
         </PixelButton>
 
-        {step < 6 ? (
+        {step === 1 ? (
           <PixelButton
             variant="primary"
             size="md"
