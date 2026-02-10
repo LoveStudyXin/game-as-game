@@ -1,0 +1,18 @@
+# Reference materials (large files)
+参考/
+
+# OS files
+.DS_Store
+*.DS_Store
+
+# Node
+node_modules/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# IDE
+.idea/
+.vscode/

@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-pixel-black: #1a1a2e;
+  --color-pixel-dark: #16213e;
+  --color-pixel-mid: #0f3460;
+  --color-pixel-accent: #e94560;
+  --color-pixel-light: #f5f5f5;
+  --color-pixel-gold: #ffd700;
+  --color-pixel-green: #00ff88;
+  --color-pixel-blue: #00d4ff;
+  --color-pixel-purple: #b388ff;
+  --color-pixel-orange: #ff9800;
+  --color-pixel-surface: #1e1e3a;
+  --color-pixel-border: #3a3a5c;
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  --background: #0a0a1a;
+  --foreground: #e0e0e0;
+}
+
+@font-face {
+  font-family: 'Press Start 2P';
+  src: url('/fonts/PressStart2P-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-pixel), monospace;
+  image-rendering: pixelated;
+}
+
+/* Pixel-perfect rendering */
+* {
+  image-rendering: pixelated;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-pixel-black);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-pixel-border);
+  border: 2px solid var(--color-pixel-black);
+}
+
+/* Pixel border utility */
+.pixel-border {
+  border: 3px solid var(--color-pixel-border);
+  box-shadow:
+    inset -2px -2px 0 0 #0a0a1a,
+    inset 2px 2px 0 0 #4a4a6c;
+}
+
+.pixel-border-accent {
+  border: 3px solid var(--color-pixel-accent);
+  box-shadow:
+    inset -2px -2px 0 0 #a0304a,
+    inset 2px 2px 0 0 #ff6b80;
+}
+
+/* Pixel button press effect */
+.pixel-press:active {
+  transform: translate(2px, 2px);
+  box-shadow: none !important;
+}
+
+/* Scanline effect for retro feel */
+.scanlines::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.1) 2px,
+    rgba(0, 0, 0, 0.1) 4px
+  );
+  pointer-events: none;
+}
+
+/* Pixel character animation */
+@keyframes pixel-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes pixel-hammer {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-30deg); }
+  50% { transform: rotate(0deg); }
+  75% { transform: rotate(-20deg); }
+}
+
+@keyframes blink {
+  0%, 90%, 100% { opacity: 1; }
+  95% { opacity: 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes glitch {
+  0% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+  100% { transform: translate(0); }
+}
+
+/* Mobile responsive utilities */
+@media (max-width: 640px) {
+  /* Prevent tap highlight on mobile */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Ensure pixel font doesn't get too tiny on small screens */
+  .font-pixel {
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+  }
+
+  /* Better touch targets on mobile */
+  button, a {
+    min-height: 32px;
+  }
+}
