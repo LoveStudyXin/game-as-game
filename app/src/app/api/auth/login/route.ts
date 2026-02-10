@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = getUserByEmail(email);
+    const user = await getUserByEmail(email);
     if (!user) {
       return NextResponse.json(
         { error: '邮箱或密码错误' },

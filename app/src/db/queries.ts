@@ -1,4 +1,4 @@
-import { getDb } from './schema';
+import { ensureDb } from './schema';
 
 // ========== User Queries ==========
 
@@ -10,28 +10,40 @@ export interface DbUser {
   created_at: string;
 }
 
-export function createUser(id: string, email: string, passwordHash: string, username: string): DbUser {
-  const db = getDb();
-  const stmt = db.prepare(
-    'INSERT INTO users (id, email, password_hash, username) VALUES (?, ?, ?, ?)'
-  );
-  stmt.run(id, email, passwordHash, username);
-  return getUserById(id)!;
+export async function createUser(id: string, email: string, passwordHash: string, username: string): Promise<DbUser> {
+  const db = await ensureDb();
+  await db.execute({
+    sql: 'INSERT INTO users (id, email, password_hash, username) VALUES (?, ?, ?, ?)',
+    args: [id, email, passwordHash, username],
+  });
+  return (await getUserById(id))!;
 }
 
-export function getUserByEmail(email: string): DbUser | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM users WHERE email = ?').get(email) as DbUser | undefined;
+export async function getUserByEmail(email: string): Promise<DbUser | undefined> {
+  const db = await ensureDb();
+  const result = await db.execute({
+    sql: 'SELECT * FROM users WHERE email = ?',
+    args: [email],
+  });
+  return result.rows[0] as unknown as DbUser | undefined;
 }
 
-export function getUserById(id: string): DbUser | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(id) as DbUser | undefined;
+export async function getUserById(id: string): Promise<DbUser | undefined> {
+  const db = await ensureDb();
+  const result = await db.execute({
+    sql: 'SELECT * FROM users WHERE id = ?',
+    args: [id],
+  });
+  return result.rows[0] as unknown as DbUser | undefined;
 }
 
-export function getUserByUsername(username: string): DbUser | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM users WHERE username = ?').get(username) as DbUser | undefined;
+export async function getUserByUsername(username: string): Promise<DbUser | undefined> {
+  const db = await ensureDb();
+  const result = await db.execute({
+    sql: 'SELECT * FROM users WHERE username = ?',
+    args: [username],
+  });
+  return result.rows[0] as unknown as DbUser | undefined;
 }
 
 // ========== Game Queries ==========
@@ -48,7 +60,7 @@ export interface DbGame {
   created_at: string;
 }
 
-export function createGame(
+export async function createGame(
   id: string,
   userId: string,
   seedCode: string,
@@ -56,55 +68,74 @@ export function createGame(
   name?: string,
   description?: string,
   parentSeed?: string
-): DbGame {
-  const db = getDb();
-  const stmt = db.prepare(
-    `INSERT INTO games (id, user_id, seed_code, config, name, description, parent_seed)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  );
-  stmt.run(id, userId, seedCode, config, name || null, description || null, parentSeed || null);
-  return getGameById(id)!;
+): Promise<DbGame> {
+  const db = await ensureDb();
+  await db.execute({
+    sql: `INSERT INTO games (id, user_id, seed_code, config, name, description, parent_seed)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, userId, seedCode, config, name || null, description || null, parentSeed || null],
+  });
+  return (await getGameById(id))!;
 }
 
-export function getGameById(id: string): DbGame | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM games WHERE id = ?').get(id) as DbGame | undefined;
+export async function getGameById(id: string): Promise<DbGame | undefined> {
+  const db = await ensureDb();
+  const result = await db.execute({
+    sql: 'SELECT * FROM games WHERE id = ?',
+    args: [id],
+  });
+  return result.rows[0] as unknown as DbGame | undefined;
 }
 
-export function getGameBySeedCode(seedCode: string): DbGame | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM games WHERE seed_code = ?').get(seedCode) as DbGame | undefined;
+export async function getGameBySeedCode(seedCode: string): Promise<DbGame | undefined> {
+  const db = await ensureDb();
+  const result = await db.execute({
+    sql: 'SELECT * FROM games WHERE seed_code = ?',
+    args: [seedCode],
+  });
+  return result.rows[0] as unknown as DbGame | undefined;
 }
 
-export function getGamesByUserId(userId: string): DbGame[] {
-  const db = getDb();
-  return db.prepare(
-    'SELECT * FROM games WHERE user_id = ? ORDER BY created_at DESC'
-  ).all(userId) as DbGame[];
+export async function getGamesByUserId(userId: string): Promise<DbGame[]> {
+  const db = await ensureDb();
+  const result = await db.execute({
+    sql: 'SELECT * FROM games WHERE user_id = ? ORDER BY created_at DESC',
+    args: [userId],
+  });
+  return result.rows as unknown as DbGame[];
 }
 
-export function incrementPlayCount(seedCode: string): void {
-  const db = getDb();
-  db.prepare('UPDATE games SET play_count = play_count + 1 WHERE seed_code = ?').run(seedCode);
+export async function incrementPlayCount(seedCode: string): Promise<void> {
+  const db = await ensureDb();
+  await db.execute({
+    sql: 'UPDATE games SET play_count = play_count + 1 WHERE seed_code = ?',
+    args: [seedCode],
+  });
 }
 
-export function getRecentGames(limit: number = 20): DbGame[] {
-  const db = getDb();
-  return db.prepare(
-    'SELECT * FROM games ORDER BY created_at DESC LIMIT ?'
-  ).all(limit) as DbGame[];
+export async function getRecentGames(limit: number = 20): Promise<DbGame[]> {
+  const db = await ensureDb();
+  const result = await db.execute({
+    sql: 'SELECT * FROM games ORDER BY created_at DESC LIMIT ?',
+    args: [limit],
+  });
+  return result.rows as unknown as DbGame[];
 }
 
-export function getPopularGames(limit: number = 20): DbGame[] {
-  const db = getDb();
-  return db.prepare(
-    'SELECT * FROM games ORDER BY play_count DESC LIMIT ?'
-  ).all(limit) as DbGame[];
+export async function getPopularGames(limit: number = 20): Promise<DbGame[]> {
+  const db = await ensureDb();
+  const result = await db.execute({
+    sql: 'SELECT * FROM games ORDER BY play_count DESC LIMIT ?',
+    args: [limit],
+  });
+  return result.rows as unknown as DbGame[];
 }
 
-export function getRemixesOfGame(parentSeed: string): DbGame[] {
-  const db = getDb();
-  return db.prepare(
-    'SELECT * FROM games WHERE parent_seed = ? ORDER BY created_at DESC'
-  ).all(parentSeed) as DbGame[];
+export async function getRemixesOfGame(parentSeed: string): Promise<DbGame[]> {
+  const db = await ensureDb();
+  const result = await db.execute({
+    sql: 'SELECT * FROM games WHERE parent_seed = ? ORDER BY created_at DESC',
+    args: [parentSeed],
+  });
+  return result.rows as unknown as DbGame[];
 }

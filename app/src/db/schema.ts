@@ -1,29 +1,29 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { createClient, type Client } from '@libsql/client';
 
-const DB_PATH = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'game-engine.db');
+let db: Client | null = null;
+let initialized = false;
 
-let db: Database.Database | null = null;
-
-export function getDb(): Database.Database {
+export function getDb(): Client {
   if (!db) {
-    // Ensure data directory exists
-    const fs = require('fs');
-    const dir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initializeDb(db);
+    db = createClient({
+      url: process.env.TURSO_DATABASE_URL || 'file:local.db',
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    });
   }
   return db;
 }
 
-function initializeDb(db: Database.Database) {
-  db.exec(`
+export async function ensureDb(): Promise<Client> {
+  const client = getDb();
+  if (!initialized) {
+    await initializeDb(client);
+    initialized = true;
+  }
+  return client;
+}
+
+async function initializeDb(db: Client) {
+  await db.executeMultiple(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,

@@ -15,17 +15,17 @@ export async function GET(request: Request) {
       if (!user) {
         return NextResponse.json({ error: '请先登录' }, { status: 401 });
       }
-      const games = getGamesByUserId(user.userId);
+      const games = await getGamesByUserId(user.userId);
       return NextResponse.json({ games });
     }
 
     if (mode === 'popular') {
-      const games = getPopularGames(limit);
+      const games = await getPopularGames(limit);
       return NextResponse.json({ games });
     }
 
     // Default: recent
-    const games = getRecentGames(limit);
+    const games = await getRecentGames(limit);
     return NextResponse.json({ games });
   } catch (error) {
     console.error('Get games error:', error);
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     }
 
     const id = generateId();
-    const game = createGame(
+    const game = await createGame(
       id,
       user.userId,
       seedCode,
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ game });
   } catch (error: any) {
-    if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE' || (error?.message && error.message.includes('UNIQUE constraint failed'))) {
       return NextResponse.json({ error: '该种子码已存在' }, { status: 409 });
     }
     console.error('Create game error:', error);

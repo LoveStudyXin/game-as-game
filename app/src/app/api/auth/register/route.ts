@@ -30,14 +30,14 @@ export async function POST(request: Request) {
     }
 
     // Check existing
-    if (getUserByEmail(email)) {
+    if (await getUserByEmail(email)) {
       return NextResponse.json(
         { error: '该邮箱已注册' },
         { status: 409 }
       );
     }
 
-    if (getUserByUsername(username)) {
+    if (await getUserByUsername(username)) {
       return NextResponse.json(
         { error: '该用户名已被使用' },
         { status: 409 }
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     // Create user
     const id = generateId();
     const passwordHash = await hashPassword(password);
-    const user = createUser(id, email, passwordHash, username);
+    const user = await createUser(id, email, passwordHash, username);
 
     // Create token
     const token = createToken({

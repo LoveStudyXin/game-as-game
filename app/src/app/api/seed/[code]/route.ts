@@ -13,13 +13,13 @@ export async function GET(
       return NextResponse.json({ error: '缺少种子码' }, { status: 400 });
     }
 
-    const game = getGameBySeedCode(code.toUpperCase());
+    const game = await getGameBySeedCode(code.toUpperCase());
     if (!game) {
       return NextResponse.json({ error: '未找到该种子码对应的游戏' }, { status: 404 });
     }
 
     // Increment play count
-    incrementPlayCount(code.toUpperCase());
+    await incrementPlayCount(code.toUpperCase());
 
     return NextResponse.json({
       game: {
