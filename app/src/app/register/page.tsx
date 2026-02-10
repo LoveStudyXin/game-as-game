@@ -89,7 +89,7 @@ export default function RegisterPage() {
             fullWidth
             disabled={loading}
           >
-            {loading ? '创建中...' : '开始冒险'}
+            {loading ? '创建中...' : '进入游戏世界'}
           </PixelButton>
         </form>
 
