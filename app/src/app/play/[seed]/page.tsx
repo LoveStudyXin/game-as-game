@@ -79,6 +79,7 @@ export default function PlayPage() {
   const [paused, setPaused] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
   const [showInstructions, setShowInstructions] = useState(true);
+  const [gameStarted, setGameStarted] = useState(false);
 
   // Timer to auto-clear narrative text
   const narrativeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -339,7 +340,11 @@ export default function PlayPage() {
             <GameInstructions
               genre={config.genre}
               gameName={config.name}
-              onStart={() => setShowInstructions(false)}
+              isReopen={gameStarted}
+              onStart={() => {
+                setShowInstructions(false);
+                setGameStarted(true);
+              }}
             />
           )}
 

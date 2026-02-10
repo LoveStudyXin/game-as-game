@@ -7,6 +7,7 @@ interface GameInstructionsProps {
   genre: GameGenre;
   gameName: string;
   onStart: () => void;
+  isReopen?: boolean; // true when opened from the rules button mid-game
 }
 
 // Genre-specific instructions
@@ -106,7 +107,7 @@ const GENRE_INSTRUCTIONS: Record<GameGenre, {
   },
 };
 
-export default function GameInstructions({ genre, gameName, onStart }: GameInstructionsProps) {
+export default function GameInstructions({ genre, gameName, onStart, isReopen = false }: GameInstructionsProps) {
   const info = GENRE_INSTRUCTIONS[genre];
 
   return (
@@ -173,7 +174,7 @@ export default function GameInstructions({ genre, gameName, onStart }: GameInstr
                        active:translate-x-[2px] active:translate-y-[2px] active:shadow-none
                        transition-all duration-100 hover:bg-[#ffed4a]"
           >
-            ▶ 开始游戏
+            {isReopen ? '↩ 返回游戏' : '▶ 开始游戏'}
           </button>
         </div>
       </div>
