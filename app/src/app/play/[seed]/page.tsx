@@ -284,7 +284,7 @@ export default function PlayPage() {
     <div className="min-h-[calc(100vh-52px)] flex flex-col items-center justify-center px-1 sm:px-2 py-2 sm:py-4">
       {/* Game container */}
       <div className="relative w-full max-w-4xl">
-        {/* Top bar: back + pause */}
+        {/* Top bar: back + rules + pause */}
         <div className="flex justify-between items-center mb-2 sm:mb-0 sm:absolute sm:-top-8 sm:left-0 sm:right-0 z-40 px-1 sm:px-0">
           <button
             onClick={() => router.push('/')}
@@ -292,12 +292,20 @@ export default function PlayPage() {
           >
             &lt; 返回
           </button>
-          <button
-            onClick={() => setPaused((p) => !p)}
-            className="font-pixel text-[7px] sm:text-[8px] text-[#9090b0] hover:text-pixel-light transition-colors cursor-pointer"
-          >
-            {paused ? '[ 继续 ]' : '[ 暂停 ]'}
-          </button>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <button
+              onClick={() => setShowInstructions(true)}
+              className="font-pixel text-[7px] sm:text-[8px] text-[#9090b0] hover:text-pixel-gold transition-colors cursor-pointer"
+            >
+              [ 规则 ]
+            </button>
+            <button
+              onClick={() => setPaused((p) => !p)}
+              className="font-pixel text-[7px] sm:text-[8px] text-[#9090b0] hover:text-pixel-light transition-colors cursor-pointer"
+            >
+              {paused ? '[ 继续 ]' : '[ 暂停 ]'}
+            </button>
+          </div>
         </div>
 
         {/* Canvas + HUD wrapper */}
