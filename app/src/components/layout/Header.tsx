@@ -27,6 +27,13 @@ export default function Header() {
         </Link>
 
         <nav className="flex items-center gap-1.5 sm:gap-3">
+          {/* Gallery link — always visible for everyone */}
+          <Link href="/gallery">
+            <PixelButton variant="ghost" size="sm">
+              🎮 画廊
+            </PixelButton>
+          </Link>
+
           {!mounted ? (
             <div className="h-[28px]" />
           ) : isLoggedIn() ? (
@@ -34,11 +41,6 @@ export default function Header() {
               <Link href="/create">
                 <PixelButton variant="accent" size="sm">
                   + 创造
-                </PixelButton>
-              </Link>
-              <Link href="/gallery" className="hidden sm:block">
-                <PixelButton variant="ghost" size="sm">
-                  画廊
                 </PixelButton>
               </Link>
               <div className="flex items-center gap-1 sm:gap-2">
