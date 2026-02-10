@@ -1318,12 +1318,38 @@ export function generateDifficultyCurve(
  * - Clues form a coherent chain building toward the solution
  * - Criminal motives drawn from Ranpo's four categories: emotional, profit, abnormal psychology, conviction
  */
+/**
+ * Generate narrative game data (text adventure / detective)
+ *
+ * User choices consumed:
+ * - worldDifference → primary template selection
+ *     colors_alive: detective (visual clues, colorful crime scenes)
+ *     sound_solid: escape_room (auditory puzzles, resonant spaces)
+ *     memory_touch: identity (memory/self exploration)
+ *     time_uneven: time_paradox (temporal puzzles)
+ * - characterArchetype → protagonist role & available choices
+ *     explorer: more investigation options, wider search paths
+ *     guardian: protective choices, helps NPCs, unlocks trust-based clues
+ *     fugitive: evasion options, risk-taking shortcuts
+ *     collector: evidence-gathering focus, finds extra clues
+ * - difficultyStyle → clue density & branching complexity
+ *     relaxed: more hints, linear path  hardcore: fewer hints, more branches
+ * - gamePace → scene count & text length
+ *     fast: fewer scenes, brisk pacing  slow: more scenes, detailed descriptions
+ * - chaosLevel → random events & unexpected twists during the story
+ */
 function generateNarrativeGameData(
   rand: () => number,
   choices: UserChoices,
 ): NarrativeGameData {
-  const templates = ['detective', 'escape_room', 'time_paradox', 'identity'];
-  const template = templates[Math.floor(rand() * templates.length)];
+  // --- Template selection based on worldDifference (not random!) ---
+  const WORLD_TO_TEMPLATE: Record<string, string> = {
+    colors_alive:  'detective',     // Visual mysteries — colorful crime scenes
+    sound_solid:   'escape_room',   // Auditory puzzles — resonant locked spaces
+    memory_touch:  'identity',      // Memory exploration — who am I?
+    time_uneven:   'time_paradox',  // Temporal puzzles — time loops
+  };
+  const template = WORLD_TO_TEMPLATE[choices.worldDifference] || 'detective';
 
   // ========================================================================
   // Case Blueprint System — Each case is a structured mystery with logical flow
@@ -1922,6 +1948,28 @@ function generateNarrativeGameData(
       blueprint = generateDetectiveCase();
   }
 
+  // --- Archetype-based bonus choices ---
+  // Each archetype adds a unique perspective choice to investigation scenes
+  const ARCHETYPE_BONUS: Record<string, { text: string; hint: string; effect: string }> = {
+    explorer:  { text: '搜索隐藏的通道和暗格', hint: '你的探索直觉告诉你这里有秘密', effect: 'find_hidden:+15' },
+    guardian:  { text: '安慰在场的相关人员', hint: '建立信任可能让他们说出真相', effect: 'change_trust:+20' },
+    fugitive:  { text: '冒险潜入禁区查看', hint: '高风险但可能获得关键证据', effect: 'risk_reward:+25' },
+    collector: { text: '仔细收集并整理所有物证', hint: '你的收集能力让你发现被忽视的细节', effect: 'extra_clue:+10' },
+  };
+  const bonusChoice = ARCHETYPE_BONUS[choices.characterArchetype];
+
+  // --- Difficulty affects hint visibility ---
+  const showHints = choices.difficultyStyle === 'relaxed' || choices.difficultyStyle === 'steady';
+
+  // --- Pace affects scene trimming ---
+  // Fast pace: skip some middle scenes; Slow pace: keep all scenes
+  const PACE_SCENE_KEEP: Record<string, number> = {
+    fast:   0.7,  // Keep 70% of scenes (skip some investigation)
+    medium: 0.85, // Keep 85%
+    slow:   1.0,  // Keep all
+  };
+  const sceneKeepRate = PACE_SCENE_KEEP[choices.gamePace] || 0.85;
+
   // Convert blueprint into NarrativeNode[]
   const nodes: NarrativeNode[] = [];
   let sceneCounter = 0;
@@ -1931,6 +1979,10 @@ function generateNarrativeGameData(
 
   for (const act of blueprint.acts) {
     for (const scene of act.scenes) {
+      // Fast pace: randomly skip some non-essential middle scenes (never first/last of act)
+      const isFirstOrLastInAct = scene === act.scenes[0] || scene === act.scenes[act.scenes.length - 1];
+      if (!isFirstOrLastInAct && rand() > sceneKeepRate) continue;
+
       const id = sceneCounter === 0 ? 'start' : `scene_${sceneCounter}`;
       allScenes.push({ scene, id });
       sceneCounter++;
@@ -1948,20 +2000,42 @@ function generateNarrativeGameData(
       // First choice always advances to next scene; additional choices can branch or loop
       const targetId = j === 0 ? nextId : (i + 2 < allScenes.length ? allScenes[i + 2].id : nextId);
       return {
-        text: c.text,
+        text: c.text + (showHints && c.hint ? ` (${c.hint})` : ''),
         nextNodeId: j === 0 ? nextId : targetId,
         effect: j === 0 && rand() > 0.7 ? 'change_trust:+10' : undefined,
       };
     });
+
+    // Add archetype bonus choice in investigation scenes (Acts 1-2, not endings)
+    if (bonusChoice && !isLast && i > 0 && i < allScenes.length - 2 && rand() > 0.4) {
+      const bonusTarget = i + 1 < allScenes.length ? allScenes[Math.min(i + 1, allScenes.length - 1)].id : nextId;
+      nodeChoices.push({
+        text: bonusChoice.text + (showHints ? ` (${bonusChoice.hint})` : ''),
+        nextNodeId: bonusTarget,
+        effect: bonusChoice.effect,
+      });
+    }
 
     // Determine clue for this scene
     const clue = scene.clueIndex !== undefined && scene.clueIndex < blueprint.clueChain.length
       ? `${blueprint.clueChain[scene.clueIndex].name}：${blueprint.clueChain[scene.clueIndex].description}`
       : undefined;
 
+    // Chaos: random events in some scenes
+    let text = scene.description;
+    if (choices.chaosLevel >= 3 && rand() > 0.7 && !isLast) {
+      const chaosEvents = [
+        '\n\n【突发事件】突然停电了，黑暗中你听到一阵急促的脚步声。',
+        '\n\n【突发事件】你的手机收到了一条匿名短信："别再查了。"',
+        '\n\n【突发事件】一阵诡异的风吹过，桌上的纸张被吹散。你注意到其中一张纸的背面有手写的字。',
+        '\n\n【突发事件】窗外传来一声巨响，像是什么东西摔碎了。',
+      ];
+      text += pick(chaosEvents);
+    }
+
     nodes.push({
       id,
-      text: scene.description,
+      text,
       background: scene.background,
       choices: nodeChoices,
       clue,
@@ -1986,53 +2060,169 @@ function generateNarrativeGameData(
 
 /**
  * Generate card game data
+ *
+ * User choices consumed:
+ * - characterArchetype → deck composition & play style
+ *     explorer: draw/mana-heavy (card advantage), guardian: heal/buff-heavy (defense),
+ *     fugitive: debuff/damage-heavy (aggro/control), collector: balanced with bonus resources
+ * - difficultyStyle → enemy strength & HP
+ *     relaxed: weak enemy, steady: balanced, hardcore: tough enemy, rollercoaster: random swings
+ * - gamePace → starting mana & hand size
+ *     fast: 4 mana + 5 cards, medium: 3 mana + 4 cards, slow: 2 mana + 3 cards
+ * - worldDifference → card names & visual theme (flavor)
+ * - visualStyle → card colors
+ * - customElement → generates a unique special card added to player deck
+ * - chaosLevel → legendary card frequency & cost variance
+ * - skillLuckRatio → rarity distribution (more skill = more commons, more luck = more legendaries)
  */
 function generateCardGameData(
   rand: () => number,
   choices: UserChoices,
 ): CardGameData {
-  const cardNames = {
-    damage: ['火球术', '暗影打击', '雷电之矛', '冰霜之刃', '毒液飞镖', '旋风斩', '爆裂射线', '石化之拳'],
-    heal: ['治愈之泉', '生命祝福', '再生之力', '圣光护盾'],
-    draw: ['智慧之书', '灵感迸发', '深思熟虑'],
-    gain_mana: ['魔力水晶', '灵能补充', '冥想'],
-    buff: ['力量增幅', '速度提升', '铁壁防御'],
-    debuff: ['虚弱诅咒', '减速陷阱', '沉默封印'],
+  const pick = <T>(arr: T[]): T => arr[Math.floor(rand() * arr.length)];
+
+  // --- Theme based on worldDifference ---
+  const THEMES: Record<string, {
+    damage: string[]; heal: string[]; draw: string[];
+    gain_mana: string[]; buff: string[]; debuff: string[];
+    enemies: string[];
+    colors: Record<string, string>;
+  }> = {
+    colors_alive: {
+      damage: ['虹光射线', '棱镜爆破', '色彩风暴', '彩虹冲击', '光谱斩', '幻彩飞弹', '极光之矛', '荧光打击'],
+      heal: ['调色修复', '彩虹祝福', '光谱治愈', '颜料之泉'],
+      draw: ['灵感画卷', '调色板', '色彩冥想'],
+      gain_mana: ['虹光水晶', '棱镜充能', '彩色冥想'],
+      buff: ['红色狂暴', '金色护盾', '蓝色专注'],
+      debuff: ['灰色褪色', '色盲诅咒', '暗淡封印'],
+      enemies: ['灰暗吞噬者', '色彩掠夺者', '单色暴君', '褪色之主', '黑白裁判'],
+      colors: { damage: '#ff6b6b', heal: '#51cf66', draw: '#339af0', gain_mana: '#cc5de8', buff: '#fcc419', debuff: '#868e96' },
+    },
+    sound_solid: {
+      damage: ['音波冲击', '共鸣爆破', '声纳攻击', '超声波斩', '重低音击', '噪音风暴', '频率之刃', '回响打击'],
+      heal: ['治愈旋律', '和弦修复', '宁静乐章', '摇篮之歌'],
+      draw: ['灵感旋律', '即兴演奏', '乐谱翻阅'],
+      gain_mana: ['音叉充能', '共鸣聚能', '静默冥想'],
+      buff: ['战鼓增幅', '号角鼓舞', '和声护盾'],
+      debuff: ['噪音干扰', '失调诅咒', '静默封印'],
+      enemies: ['噪音魔王', '失调指挥', '不和谐巨人', '沉默暴君', '刺耳女妖'],
+      colors: { damage: '#f06595', heal: '#20c997', draw: '#4dabf7', gain_mana: '#845ef7', buff: '#fab005', debuff: '#adb5bd' },
+    },
+    memory_touch: {
+      damage: ['记忆碎片', '回忆冲击', '往事之痛', '遗忘射线', '时光裂隙', '记忆洪流', '灵魂触碰', '心灵打击'],
+      heal: ['温暖回忆', '童年治愈', '思念之光', '记忆补全'],
+      draw: ['回忆涌现', '灵魂搜索', '冥想回溯'],
+      gain_mana: ['记忆之泉', '灵魂充能', '专注凝聚'],
+      buff: ['执念强化', '铭记护盾', '信念增幅'],
+      debuff: ['遗忘诅咒', '记忆混乱', '失忆封印'],
+      enemies: ['遗忘之兽', '记忆吞噬者', '虚无幽灵', '混沌思维', '记忆篡改者'],
+      colors: { damage: '#e599f7', heal: '#63e6be', draw: '#74c0fc', gain_mana: '#b197fc', buff: '#ffe066', debuff: '#ced4da' },
+    },
+    time_uneven: {
+      damage: ['时间加速', '时停打击', '因果逆转', '时间裂缝', '永恒之矛', '瞬间爆发', '时间碎片', '未来冲击'],
+      heal: ['时光倒流', '修复过去', '时间缝合', '永恒之泉'],
+      draw: ['预知未来', '时间透视', '命运之眼'],
+      gain_mana: ['时间凝缩', '瞬间永恒', '时间晶体'],
+      buff: ['加速光环', '时间护盾', '预知防御'],
+      debuff: ['时间减速', '老化诅咒', '时停封印'],
+      enemies: ['时间守卫', '因果之主', '永恒看门人', '时间悖论', '末日钟摆'],
+      colors: { damage: '#ff8787', heal: '#38d9a9', draw: '#4dabf7', gain_mana: '#9775fa', buff: '#ffd43b', debuff: '#dee2e6' },
+    },
   };
 
-  const makeCard = (effect: string, i: number): CardDef => {
-    const names = cardNames[effect as keyof typeof cardNames] || cardNames.damage;
-    const name = names[Math.floor(rand() * names.length)];
+  const theme = THEMES[choices.worldDifference] || THEMES.colors_alive;
+
+  // --- Archetype determines deck composition weights ---
+  // Each array: [damage, heal, draw, gain_mana, buff, debuff] relative weights
+  const ARCHETYPE_WEIGHTS: Record<string, number[]> = {
+    explorer:   [2, 1, 4, 3, 1, 1],  // Draw & mana heavy — card advantage strategy
+    guardian:   [2, 4, 1, 1, 3, 1],  // Heal & buff heavy — outlast strategy
+    fugitive:   [4, 1, 1, 1, 1, 4],  // Damage & debuff heavy — aggro/control
+    collector:  [2, 2, 2, 3, 2, 1],  // Balanced with extra mana — resource strategy
+  };
+
+  const weights = ARCHETYPE_WEIGHTS[choices.characterArchetype] || ARCHETYPE_WEIGHTS.explorer;
+  const effectTypes = ['damage', 'heal', 'draw', 'gain_mana', 'buff', 'debuff'];
+
+  // Build weighted effect pool
+  const effectPool: string[] = [];
+  for (let e = 0; e < effectTypes.length; e++) {
+    for (let w = 0; w < weights[e]; w++) {
+      effectPool.push(effectTypes[e]);
+    }
+  }
+
+  // --- Difficulty affects enemy stats ---
+  const DIFFICULTY_TUNING: Record<string, { enemyHp: number; enemyDeckSize: number; enemyExtra: string[]; playerHp: number }> = {
+    relaxed:       { enemyHp: 20, enemyDeckSize: 15, enemyExtra: ['damage', 'heal'],          playerHp: 35 },
+    steady:        { enemyHp: 28, enemyDeckSize: 20, enemyExtra: ['damage', 'heal', 'buff'],  playerHp: 30 },
+    hardcore:      { enemyHp: 35, enemyDeckSize: 25, enemyExtra: ['damage', 'buff', 'debuff'], playerHp: 25 },
+    rollercoaster: { enemyHp: 30, enemyDeckSize: 22, enemyExtra: ['damage', 'damage', 'buff', 'debuff', 'heal'], playerHp: 28 },
+  };
+  const diffTuning = DIFFICULTY_TUNING[choices.difficultyStyle] || DIFFICULTY_TUNING.steady;
+
+  // --- Pace affects starting resources ---
+  const PACE_TUNING: Record<string, { startMana: number; handSize: number; maxMana: number }> = {
+    fast:   { startMana: 4, handSize: 5, maxMana: 12 },
+    medium: { startMana: 3, handSize: 4, maxMana: 10 },
+    slow:   { startMana: 2, handSize: 3, maxMana: 8 },
+  };
+  const paceTuning = PACE_TUNING[choices.gamePace] || PACE_TUNING.medium;
+
+  // --- Skill/Luck ratio affects rarity distribution ---
+  const RARITY_THRESHOLDS: Record<string, { legendary: number; rare: number; uncommon: number }> = {
+    pure_skill:   { legendary: 0.98, rare: 0.88, uncommon: 0.60 }, // Mostly commons — predictable
+    skill_heavy:  { legendary: 0.95, rare: 0.82, uncommon: 0.55 },
+    balanced:     { legendary: 0.90, rare: 0.70, uncommon: 0.40 },
+    luck_heavy:   { legendary: 0.80, rare: 0.55, uncommon: 0.30 }, // More legendaries — swingy
+  };
+  const rarityThresh = RARITY_THRESHOLDS[choices.skillLuckRatio] || RARITY_THRESHOLDS.balanced;
+
+  // --- Chaos level affects cost variance & legendary frequency ---
+  const chaosMultiplier = 1 + (choices.chaosLevel / 5) * 0.5; // 0→1, 5→1.5
+
+  // --- Card maker ---
+  const makeCard = (effect: string, i: number, forEnemy = false): CardDef => {
+    const names = theme[effect as keyof typeof theme];
+    const nameList = Array.isArray(names) ? names as string[] : theme.damage;
+    const name = nameList[Math.floor(rand() * nameList.length)];
+
     const rarityRoll = rand();
-    const rarity: CardDef['rarity'] = rarityRoll > 0.9 ? 'legendary' : rarityRoll > 0.7 ? 'rare' : rarityRoll > 0.4 ? 'uncommon' : 'common';
-    const rarityMultiplier = { common: 1, uncommon: 1.3, rare: 1.6, legendary: 2 }[rarity];
+    const rarity: CardDef['rarity'] =
+      rarityRoll > rarityThresh.legendary ? 'legendary' :
+      rarityRoll > rarityThresh.rare ? 'rare' :
+      rarityRoll > rarityThresh.uncommon ? 'uncommon' : 'common';
+    const rarityMultiplier = { common: 1, uncommon: 1.3, rare: 1.6, legendary: 2.2 }[rarity];
+
+    // Chaos adds variance
+    const costVariance = Math.floor(rand() * chaosMultiplier);
 
     let cost: number;
     let value: number;
 
     switch (effect) {
       case 'damage':
-        cost = 1 + Math.floor(rand() * 4);
+        cost = Math.max(1, 1 + Math.floor(rand() * 4) + costVariance);
         value = Math.floor((2 + rand() * 4) * rarityMultiplier);
         break;
       case 'heal':
-        cost = 1 + Math.floor(rand() * 3);
+        cost = Math.max(1, 1 + Math.floor(rand() * 3) + costVariance);
         value = Math.floor((3 + rand() * 3) * rarityMultiplier);
         break;
       case 'draw':
-        cost = 1 + Math.floor(rand() * 2);
-        value = 1 + Math.floor(rand() * 2);
+        cost = Math.max(1, 1 + Math.floor(rand() * 2));
+        value = 1 + Math.floor(rand() * 2 * rarityMultiplier);
         break;
       case 'gain_mana':
         cost = 0;
-        value = 1 + Math.floor(rand() * 2);
+        value = 1 + Math.floor(rand() * 2 * rarityMultiplier);
         break;
       case 'buff':
-        cost = 2 + Math.floor(rand() * 2);
+        cost = Math.max(1, 2 + Math.floor(rand() * 2) + costVariance);
         value = Math.floor((2 + rand() * 3) * rarityMultiplier);
         break;
       case 'debuff':
-        cost = 2 + Math.floor(rand() * 3);
+        cost = Math.max(1, 2 + Math.floor(rand() * 3));
         value = Math.floor((2 + rand() * 2) * rarityMultiplier);
         break;
       default:
@@ -2040,80 +2230,147 @@ function generateCardGameData(
         value = 3;
     }
 
-    const colors: Record<string, string> = {
-      damage: '#ff4444', heal: '#44ff44', draw: '#4488ff',
-      gain_mana: '#aa44ff', buff: '#ffaa44', debuff: '#888888',
+    const colors = theme.colors;
+    const descMap: Record<string, string> = {
+      damage: `造成 ${value} 点伤害`,
+      heal: `恢复 ${value} 点生命`,
+      draw: `抽 ${value} 张牌`,
+      gain_mana: `获得 ${value} 点法力`,
+      buff: `下次攻击 +${value}`,
+      debuff: `削弱敌人 ${value} 点`,
     };
 
     return {
-      id: `card_${effect}_${i}`,
+      id: `card_${forEnemy ? 'e' : 'p'}_${effect}_${i}`,
       name: `${name}${rarity === 'legendary' ? ' EX' : rarity === 'rare' ? '+' : ''}`,
       cost,
       effect,
       value,
-      description: `${effect === 'damage' ? `Deal ${value} damage` : effect === 'heal' ? `Heal ${value} HP` : effect === 'draw' ? `Draw ${value} cards` : effect === 'gain_mana' ? `Gain ${value} mana` : effect === 'buff' ? `+${value} to next attack` : `Weaken enemy by ${value}`}`,
+      description: descMap[effect] || `效果值 ${value}`,
       rarity,
-      color: colors[effect] || '#aaaaaa',
+      color: colors[effect as keyof typeof colors] || '#aaaaaa',
     };
   };
 
-  // Build player deck (25-30 cards)
+  // --- Build player deck (archetype-weighted) ---
   const deckSize = 25 + Math.floor(rand() * 6);
-  const effects = ['damage', 'damage', 'damage', 'heal', 'draw', 'gain_mana', 'buff', 'debuff'];
   const playerDeck: CardDef[] = [];
   for (let i = 0; i < deckSize; i++) {
-    const effect = effects[Math.floor(rand() * effects.length)];
+    const effect = effectPool[Math.floor(rand() * effectPool.length)];
     playerDeck.push(makeCard(effect, i));
   }
 
-  // Enemy deck (slightly simpler)
-  const enemyDeck: CardDef[] = [];
-  const enemyEffects = ['damage', 'damage', 'damage', 'heal', 'buff'];
-  for (let i = 0; i < 20; i++) {
-    const effect = enemyEffects[Math.floor(rand() * enemyEffects.length)];
-    enemyDeck.push(makeCard(effect, i + 100));
+  // --- Custom element: generate a unique signature card ---
+  if (choices.customElement && choices.customElement.trim()) {
+    const customName = choices.customElement.trim().slice(0, 12);
+    const customCard: CardDef = {
+      id: 'card_custom_special',
+      name: `✦ ${customName}`,
+      cost: 2,
+      effect: 'damage',
+      value: Math.floor(8 * chaosMultiplier),
+      description: `${customName}的力量！造成 ${Math.floor(8 * chaosMultiplier)} 点伤害并抽1张牌`,
+      rarity: 'legendary',
+      color: '#ffd700',
+    };
+    playerDeck.unshift(customCard); // Put it at the front so player sees it early
   }
 
-  const enemyNames = ['暗影法师', '机械巨人', '冰霜女王', '混沌骑士', '幽灵猎手'];
+  // --- Enemy deck (uses difficulty tuning) ---
+  const enemyEffects = diffTuning.enemyExtra;
+  const enemyDeck: CardDef[] = [];
+  for (let i = 0; i < diffTuning.enemyDeckSize; i++) {
+    const effect = enemyEffects[Math.floor(rand() * enemyEffects.length)];
+    enemyDeck.push(makeCard(effect, i + 100, true));
+  }
+
+  // Hardcore enemies get bonus high-value damage cards
+  if (choices.difficultyStyle === 'hardcore') {
+    for (let i = 0; i < 3; i++) {
+      const bonusCard = makeCard('damage', 200 + i, true);
+      bonusCard.value = Math.floor(bonusCard.value * 1.5);
+      bonusCard.description = `造成 ${bonusCard.value} 点伤害`;
+      enemyDeck.push(bonusCard);
+    }
+  }
 
   return {
     playerDeck,
     enemyDeck,
-    playerHp: 30,
-    enemyHp: 25 + Math.floor(rand() * 10),
-    startingMana: 3,
-    maxMana: 10,
-    handSize: 4,
-    enemyName: enemyNames[Math.floor(rand() * enemyNames.length)],
+    playerHp: diffTuning.playerHp,
+    enemyHp: diffTuning.enemyHp + Math.floor(rand() * 8),
+    startingMana: paceTuning.startMana,
+    maxMana: paceTuning.maxMana,
+    handSize: paceTuning.handSize,
+    enemyName: pick(theme.enemies),
   };
 }
 
 /**
  * Generate board / tactics game data
+ *
+ * User choices consumed:
+ * - worldDifference → terrain distribution & visual theme
+ *     colors_alive: more forests & plains (lush), sound_solid: more mountains (resonant caves),
+ *     memory_touch: more water (reflective), time_uneven: more lava & mixed (unstable)
+ * - characterArchetype → player piece composition & stats
+ *     explorer: mobile units (scouts, cavalry), guardian: tanky units (knights, shields),
+ *     fugitive: ranged/stealth units (archers, assassins), collector: support units (healers, mages)
+ * - difficultyStyle → enemy count, stats, AI aggressiveness
+ *     relaxed: fewer/weaker enemies, hardcore: more/stronger enemies with specials
+ * - gamePace → turn limit & board size
+ *     fast: 6×6 + 15 turns, medium: 8×8 + 25 turns, slow: 10×10 + no limit
+ * - chaosLevel → terrain randomness & special terrain frequency
+ * - customElement → names a custom unit type added to player army
  */
 function generateBoardGameData(
   rand: () => number,
   choices: UserChoices,
 ): BoardGameData {
-  const boardW = 8;
-  const boardH = 8;
+  // --- Board size from pace ---
+  const PACE_BOARD: Record<string, { w: number; h: number; turnLimit?: number }> = {
+    fast:   { w: 6, h: 6, turnLimit: 15 },
+    medium: { w: 8, h: 8, turnLimit: 25 },
+    slow:   { w: 10, h: 10 },
+  };
+  const boardConfig = PACE_BOARD[choices.gamePace] || PACE_BOARD.medium;
+  const boardW = boardConfig.w;
+  const boardH = boardConfig.h;
 
-  // Generate terrain
+  // --- Terrain distribution from worldDifference ---
+  // Each array: [plain%, forest%, mountain%, water%, lava%] thresholds (cumulative)
+  const TERRAIN_DIST: Record<string, number[]> = {
+    colors_alive:  [0.55, 0.80, 0.90, 0.97, 1.00],  // Lush: lots of forest
+    sound_solid:   [0.45, 0.60, 0.85, 0.95, 1.00],  // Mountainous: lots of mountains
+    memory_touch:  [0.50, 0.65, 0.78, 0.95, 1.00],  // Reflective: lots of water
+    time_uneven:   [0.40, 0.55, 0.70, 0.85, 1.00],  // Chaotic: more lava & mixed
+  };
+  const dist = TERRAIN_DIST[choices.worldDifference] || TERRAIN_DIST.colors_alive;
+
+  // Chaos increases randomness in terrain
+  const chaosTerrainBoost = choices.chaosLevel * 0.03; // 0→0, 5→0.15
+
   const terrain: TerrainType[][] = [];
+  const terrainTypes: TerrainType[] = ['plain', 'forest', 'mountain', 'water', 'lava'];
+
   for (let y = 0; y < boardH; y++) {
     const row: TerrainType[] = [];
     for (let x = 0; x < boardW; x++) {
       const r = rand();
-      if (r > 0.85) row.push('mountain');
-      else if (r > 0.78) row.push('forest');
-      else if (r > 0.72) row.push('water');
-      else if (r > 0.95) row.push('lava');
-      else row.push('plain');
+      // Shift thresholds by chaos (more chaos = more special terrain)
+      let picked: TerrainType = 'plain';
+      for (let t = 0; t < dist.length; t++) {
+        if (r < dist[t] - chaosTerrainBoost * (4 - t)) {
+          picked = terrainTypes[t];
+          break;
+        }
+      }
+      row.push(picked);
     }
     terrain.push(row);
   }
 
-  // Ensure starting positions are plain
+  // Ensure starting positions (2 rows each side) are always plain for fair play
   for (let y = 0; y < 2; y++) {
     for (let x = 0; x < boardW; x++) {
       terrain[y][x] = 'plain';
@@ -2121,30 +2378,104 @@ function generateBoardGameData(
     }
   }
 
-  // Generate pieces
-  const pieceTemplates: Omit<BoardPieceDef, 'id'>[] = [
-    { name: '战士', color: '#4488ff', moveRange: 2, attackRange: 1, hp: 10, maxHp: 10, atk: 3, special: '近战专家' },
-    { name: '弓手', color: '#44ff88', moveRange: 3, attackRange: 3, hp: 6, maxHp: 6, atk: 2, special: '远程攻击' },
-    { name: '骑士', color: '#ffaa44', moveRange: 4, attackRange: 1, hp: 8, maxHp: 8, atk: 4, special: '冲锋' },
-    { name: '法师', color: '#aa44ff', moveRange: 2, attackRange: 2, hp: 5, maxHp: 5, atk: 5, special: '范围攻击' },
-    { name: '坦克', color: '#888888', moveRange: 1, attackRange: 1, hp: 15, maxHp: 15, atk: 2, special: '重甲' },
-  ];
+  // --- Piece templates based on characterArchetype ---
+  const ALL_PIECES: Record<string, Omit<BoardPieceDef, 'id'>[]> = {
+    explorer: [
+      { name: '斥候', color: '#4488ff', moveRange: 4, attackRange: 1, hp: 6, maxHp: 6, atk: 2, special: '侦察：可以看到迷雾区域' },
+      { name: '骑兵', color: '#ffaa44', moveRange: 5, attackRange: 1, hp: 8, maxHp: 8, atk: 3, special: '冲锋：移动后攻击+2' },
+      { name: '探险家', color: '#44ff88', moveRange: 3, attackRange: 2, hp: 7, maxHp: 7, atk: 3, special: '地形适应：无视地形消耗' },
+      { name: '游骑兵', color: '#88aaff', moveRange: 4, attackRange: 2, hp: 7, maxHp: 7, atk: 2, special: '机动射击：攻击后可移动1格' },
+      { name: '信使', color: '#aaddff', moveRange: 6, attackRange: 1, hp: 4, maxHp: 4, atk: 1, special: '急行：移动力最高' },
+    ],
+    guardian: [
+      { name: '重甲骑士', color: '#4488ff', moveRange: 2, attackRange: 1, hp: 15, maxHp: 15, atk: 3, special: '坚盾：受伤减半' },
+      { name: '守卫', color: '#888888', moveRange: 2, attackRange: 1, hp: 12, maxHp: 12, atk: 2, special: '嘲讽：迫使邻近敌人攻击自己' },
+      { name: '圣骑士', color: '#ffdd44', moveRange: 2, attackRange: 1, hp: 10, maxHp: 10, atk: 4, special: '神圣打击：对低HP敌人伤害翻倍' },
+      { name: '盾兵', color: '#aaaaaa', moveRange: 1, attackRange: 1, hp: 18, maxHp: 18, atk: 1, special: '不动如山：无法被击退' },
+      { name: '治疗师', color: '#44ff88', moveRange: 2, attackRange: 2, hp: 6, maxHp: 6, atk: 1, special: '治愈：回复邻近友军3HP' },
+    ],
+    fugitive: [
+      { name: '刺客', color: '#aa44ff', moveRange: 3, attackRange: 1, hp: 5, maxHp: 5, atk: 6, special: '暗杀：对满HP目标伤害翻倍' },
+      { name: '弓箭手', color: '#44ff88', moveRange: 3, attackRange: 4, hp: 5, maxHp: 5, atk: 3, special: '远射：攻击范围最远' },
+      { name: '忍者', color: '#333333', moveRange: 4, attackRange: 1, hp: 4, maxHp: 4, atk: 5, special: '隐身：首次攻击必定暴击' },
+      { name: '狙击手', color: '#ff6644', moveRange: 2, attackRange: 5, hp: 4, maxHp: 4, atk: 4, special: '精准射击：无视距离衰减' },
+      { name: '陷阱师', color: '#ffaa44', moveRange: 3, attackRange: 2, hp: 6, maxHp: 6, atk: 2, special: '布置陷阱：在移动路径放置陷阱' },
+    ],
+    collector: [
+      { name: '法师', color: '#aa44ff', moveRange: 2, attackRange: 3, hp: 5, maxHp: 5, atk: 5, special: '范围攻击：伤害溅射邻近敌人' },
+      { name: '吟游诗人', color: '#ffdd44', moveRange: 3, attackRange: 2, hp: 6, maxHp: 6, atk: 2, special: '鼓舞：增强邻近友军攻击+2' },
+      { name: '召唤师', color: '#cc55ff', moveRange: 2, attackRange: 2, hp: 6, maxHp: 6, atk: 3, special: '召唤：产生临时援军' },
+      { name: '炼金术士', color: '#44ddaa', moveRange: 3, attackRange: 2, hp: 7, maxHp: 7, atk: 2, special: '投瓶：造成持续伤害' },
+      { name: '学者', color: '#88aaff', moveRange: 2, attackRange: 2, hp: 5, maxHp: 5, atk: 3, special: '分析弱点：下次攻击伤害+3' },
+    ],
+  };
+
+  const archetypePieces = ALL_PIECES[choices.characterArchetype] || ALL_PIECES.explorer;
+
+  // --- Piece count from difficulty ---
+  const DIFF_PIECES: Record<string, { playerCount: number; enemyCount: number; enemyStatMult: number }> = {
+    relaxed:       { playerCount: 4, enemyCount: 3, enemyStatMult: 0.8 },
+    steady:        { playerCount: 4, enemyCount: 4, enemyStatMult: 1.0 },
+    hardcore:      { playerCount: 3, enemyCount: 5, enemyStatMult: 1.3 },
+    rollercoaster: { playerCount: 4, enemyCount: 4, enemyStatMult: 1.1 },
+  };
+  const diffPieces = DIFF_PIECES[choices.difficultyStyle] || DIFF_PIECES.steady;
 
   const pieces: { piece: BoardPieceDef; x: number; y: number; owner: 'player' | 'enemy' }[] = [];
-  const pieceCount = 3 + Math.floor(rand() * 3); // 3-5 pieces per side
 
-  for (let i = 0; i < pieceCount; i++) {
-    const template = pieceTemplates[i % pieceTemplates.length];
-    // Player pieces (bottom rows)
+  // Player pieces (from archetype pool)
+  for (let i = 0; i < diffPieces.playerCount && i < archetypePieces.length; i++) {
+    const template = archetypePieces[i];
     pieces.push({
       piece: { ...template, id: `p_${i}` },
       x: 1 + Math.floor(rand() * (boardW - 2)),
       y: boardH - 1 - Math.floor(rand() * 2),
       owner: 'player',
     });
-    // Enemy pieces (top rows)
+  }
+
+  // Custom element: add a special unit if provided
+  if (choices.customElement && choices.customElement.trim()) {
+    const customName = choices.customElement.trim().slice(0, 8);
     pieces.push({
-      piece: { ...template, id: `e_${i}`, name: `敌${template.name}`, color: '#ff4444' },
+      piece: {
+        id: 'p_custom',
+        name: `★${customName}`,
+        color: '#ffd700',
+        moveRange: 3,
+        attackRange: 2,
+        hp: 10,
+        maxHp: 10,
+        atk: 4,
+        special: `${customName}的特殊能力`,
+      },
+      x: Math.floor(boardW / 2),
+      y: boardH - 1,
+      owner: 'player',
+    });
+  }
+
+  // Enemy pieces (generic enemy army, scaled by difficulty)
+  const enemyTemplates: Omit<BoardPieceDef, 'id'>[] = [
+    { name: '敌战士', color: '#ff4444', moveRange: 2, attackRange: 1, hp: 10, maxHp: 10, atk: 3 },
+    { name: '敌弓手', color: '#ff6644', moveRange: 3, attackRange: 3, hp: 6, maxHp: 6, atk: 2 },
+    { name: '敌骑士', color: '#ff8844', moveRange: 4, attackRange: 1, hp: 8, maxHp: 8, atk: 4, special: '冲锋' },
+    { name: '敌法师', color: '#ff44aa', moveRange: 2, attackRange: 2, hp: 5, maxHp: 5, atk: 5, special: '范围攻击' },
+    { name: '敌坦克', color: '#cc2222', moveRange: 1, attackRange: 1, hp: 15, maxHp: 15, atk: 2, special: '重甲' },
+  ];
+
+  for (let i = 0; i < diffPieces.enemyCount; i++) {
+    const template = enemyTemplates[i % enemyTemplates.length];
+    const scaledHp = Math.round(template.hp * diffPieces.enemyStatMult);
+    const scaledAtk = Math.round(template.atk * diffPieces.enemyStatMult);
+    pieces.push({
+      piece: {
+        ...template,
+        id: `e_${i}`,
+        hp: scaledHp,
+        maxHp: scaledHp,
+        atk: scaledAtk,
+      },
       x: 1 + Math.floor(rand() * (boardW - 2)),
       y: Math.floor(rand() * 2),
       owner: 'enemy',
@@ -2156,91 +2487,208 @@ function generateBoardGameData(
     height: boardH,
     terrain,
     pieces,
+    turnLimit: boardConfig.turnLimit,
   };
 }
 
 /**
  * Generate logic puzzle game data
+ *
+ * User choices consumed:
+ * - difficultyStyle → puzzle complexity & time limits
+ *     relaxed: 4x4 sudoku, easy sequences, generous time
+ *     steady: mixed difficulty, standard time
+ *     hardcore: 6x6 sudoku, complex sequences, tight time
+ *     rollercoaster: random mix of easy and hard
+ * - gamePace → puzzle count
+ *     fast: 2-3 puzzles, medium: 3-5 puzzles, slow: 5-7 puzzles
+ * - worldDifference → connection puzzle themes
+ *     colors_alive: art/color themes, sound_solid: music/sound themes,
+ *     memory_touch: memory/emotion themes, time_uneven: time/science themes
+ * - customElement → adds themed clue text to puzzles
+ * - chaosLevel → more unusual puzzle variants, more nulls in sudoku
+ * - skillLuckRatio → hide probability in sudoku (skill = more visible, luck = more hidden)
  */
 function generatePuzzleGameData(
   rand: () => number,
   choices: UserChoices,
 ): PuzzleGameData {
+  const pick = <T>(arr: T[]): T => arr[Math.floor(rand() * arr.length)];
   const puzzles: LogicPuzzleDef[] = [];
-  const puzzleCount = 3 + Math.floor(rand() * 3); // 3-5 puzzles
+
+  // --- Puzzle count from pace ---
+  const PACE_COUNT: Record<string, [number, number]> = {
+    fast:   [2, 3],
+    medium: [3, 5],
+    slow:   [5, 7],
+  };
+  const [minCount, maxCount] = PACE_COUNT[choices.gamePace] || PACE_COUNT.medium;
+  const puzzleCount = minCount + Math.floor(rand() * (maxCount - minCount + 1));
+
+  // --- Difficulty tuning ---
+  const DIFF_TUNING: Record<string, {
+    sudokuSize: number; hideRate: number; timeMult: number;
+    seqLength: number; connectionGroups: number;
+  }> = {
+    relaxed:       { sudokuSize: 4, hideRate: 0.35, timeMult: 1.5, seqLength: 5, connectionGroups: 3 },
+    steady:        { sudokuSize: 4, hideRate: 0.50, timeMult: 1.0, seqLength: 6, connectionGroups: 4 },
+    hardcore:      { sudokuSize: 6, hideRate: 0.65, timeMult: 0.7, seqLength: 7, connectionGroups: 4 },
+    rollercoaster: { sudokuSize: 4, hideRate: 0.55, timeMult: 1.0, seqLength: 6, connectionGroups: 4 },
+  };
+  const diffTuning = DIFF_TUNING[choices.difficultyStyle] || DIFF_TUNING.steady;
+
+  // Skill/luck adjusts hide rate (more skill = more visible cells to reason about)
+  const SKILL_HIDE_ADJ: Record<string, number> = {
+    pure_skill: -0.15, skill_heavy: -0.08, balanced: 0, luck_heavy: 0.10,
+  };
+  const hideAdj = SKILL_HIDE_ADJ[choices.skillLuckRatio] || 0;
+  const effectiveHideRate = Math.max(0.2, Math.min(0.75, diffTuning.hideRate + hideAdj));
+
+  // Chaos adds more variety
+  const chaosFactor = choices.chaosLevel / 5; // 0→0, 5→1
+
+  // --- Connection themes from worldDifference ---
+  const CONNECTION_THEMES: Record<string, { groups: string[][]; labels: string[] }[]> = {
+    colors_alive: [
+      { groups: [['玫瑰', '向日葵', '百合', '兰花'], ['红色', '金色', '白色', '紫色'], ['水彩', '油画', '素描', '版画'], ['春天', '夏天', '秋天', '冬天']], labels: ['花卉', '颜色', '画法', '季节'] },
+      { groups: [['梵高', '莫奈', '毕加索', '达芬奇'], ['星空', '睡莲', '格尔尼卡', '蒙娜丽莎'], ['调色板', '画笔', '画布', '颜料'], ['红', '黄', '蓝', '绿']], labels: ['画家', '名画', '工具', '三原色+'] },
+      { groups: [['苹果', '西瓜', '蓝莓', '柠檬'], ['三角形', '圆形', '方形', '菱形'], ['钢琴', '吉他', '小提琴', '鼓'], ['太阳', '月亮', '星星', '彩虹']], labels: ['水果', '形状', '乐器', '天体'] },
+    ],
+    sound_solid: [
+      { groups: [['钢琴', '小提琴', '大提琴', '长笛'], ['摇滚', '爵士', '古典', '电子'], ['do', 're', 'mi', 'fa'], ['鼓点', '旋律', '和声', '节奏']], labels: ['乐器', '曲风', '音阶', '音乐元素'] },
+      { groups: [['贝多芬', '莫扎特', '巴赫', '肖邦'], ['交响曲', '奏鸣曲', '协奏曲', '小夜曲'], ['高音', '中音', '低音', '重低音'], ['钢琴', '管风琴', '手风琴', '电子琴']], labels: ['作曲家', '曲式', '音域', '键盘乐器'] },
+    ],
+    memory_touch: [
+      { groups: [['快乐', '悲伤', '愤怒', '平静'], ['拥抱', '握手', '点头', '微笑'], ['童年', '青春', '成年', '老年'], ['日记', '相册', '信件', '礼物']], labels: ['情绪', '肢体语言', '人生阶段', '记忆载体'] },
+      { groups: [['思念', '怀旧', '感恩', '希望'], ['味觉', '听觉', '视觉', '触觉'], ['家', '学校', '公园', '图书馆'], ['春风', '夏雨', '秋叶', '冬雪']], labels: ['情感', '感官', '记忆场所', '季节意象'] },
+    ],
+    time_uneven: [
+      { groups: [['光年', '纳秒', '世纪', '刹那'], ['相对论', '量子力学', '热力学', '电磁学'], ['爱因斯坦', '牛顿', '霍金', '薛定谔'], ['黑洞', '虫洞', '白矮星', '中子星']], labels: ['时间单位', '物理理论', '科学家', '天体'] },
+      { groups: [['过去', '现在', '未来', '永恒'], ['沙漏', '日晷', '钟摆', '石英'], ['秒', '分', '时', '日'], ['加速', '减速', '暂停', '倒流']], labels: ['时间维度', '计时工具', '时间单位', '时间操控'] },
+    ],
+  };
+
+  // --- Sequence patterns scaled by difficulty ---
+  const EASY_SEQS = [
+    { seq: [2, 4, 6, null, 10, null], sol: [2, 4, 6, 8, 10, 12], clue: '规律：+2' },
+    { seq: [3, 6, null, 12, 15, null], sol: [3, 6, 9, 12, 15, 18], clue: '规律：+3' },
+    { seq: [5, 10, null, 20, null, 30], sol: [5, 10, 15, 20, 25, 30], clue: '规律：+5' },
+    { seq: [1, 3, 5, null, 9, null], sol: [1, 3, 5, 7, 9, 11], clue: '规律：奇数列' },
+  ];
+  const MEDIUM_SEQS = [
+    { seq: [1, 1, 2, 3, null, 8, null], sol: [1, 1, 2, 3, 5, 8, 13], clue: '斐波那契数列' },
+    { seq: [1, 4, null, 16, null, 36], sol: [1, 4, 9, 16, 25, 36], clue: '完全平方数' },
+    { seq: [2, 6, null, 20, 30, null], sol: [2, 6, 12, 20, 30, 42], clue: '规律：n×(n+1)' },
+    { seq: [1, 2, 4, null, 16, null], sol: [1, 2, 4, 8, 16, 32], clue: '规律：×2' },
+  ];
+  const HARD_SEQS = [
+    { seq: [1, 1, 2, 3, 5, null, null], sol: [1, 1, 2, 3, 5, 8, 13], clue: '斐波那契数列' },
+    { seq: [1, 3, null, 10, null, 21], sol: [1, 3, 6, 10, 15, 21], clue: '三角数' },
+    { seq: [2, 3, 5, 7, null, 13, null], sol: [2, 3, 5, 7, 11, 13, 17], clue: '质数列' },
+    { seq: [1, 8, null, 64, null, 216], sol: [1, 8, 27, 64, 125, 216], clue: '完全立方数' },
+    { seq: [0, 1, 1, 2, null, 5, null, 14], sol: [0, 1, 1, 2, 3, 5, 9, 14], clue: '泰波那契数列' },
+  ];
+
+  // Select puzzle types
+  const puzzleTypes: LogicPuzzleDef['type'][] = ['sudoku', 'connection', 'sequence'];
 
   for (let p = 0; p < puzzleCount; p++) {
-    const puzzleTypes: LogicPuzzleDef['type'][] = ['sudoku', 'connection', 'sequence'];
-    const ptype = puzzleTypes[Math.floor(rand() * puzzleTypes.length)];
+    // Rollercoaster: alternate between easy and hard
+    const isHardRound = choices.difficultyStyle === 'rollercoaster' ? p % 2 === 1 : false;
+    const ptype = puzzleTypes[p % puzzleTypes.length]; // Cycle through types for variety
 
     switch (ptype) {
       case 'sudoku': {
-        // Generate a simple 4x4 sudoku
-        const size = 4;
-        const solution: (number | string)[][] = [
-          [1, 2, 3, 4],
-          [3, 4, 1, 2],
-          [2, 1, 4, 3],
-          [4, 3, 2, 1],
-        ];
-        // Shuffle rows within blocks and columns
-        if (rand() > 0.5) {
-          [solution[0], solution[1]] = [solution[1], solution[0]];
-        }
-        if (rand() > 0.5) {
-          [solution[2], solution[3]] = [solution[3], solution[2]];
+        const size = (isHardRound || diffTuning.sudokuSize === 6) ? 6 : 4;
+
+        let solution: (number | string)[][];
+        if (size === 4) {
+          solution = [
+            [1, 2, 3, 4],
+            [3, 4, 1, 2],
+            [2, 1, 4, 3],
+            [4, 3, 2, 1],
+          ];
+          // Shuffle rows within blocks
+          if (rand() > 0.5) [solution[0], solution[1]] = [solution[1], solution[0]];
+          if (rand() > 0.5) [solution[2], solution[3]] = [solution[3], solution[2]];
+        } else {
+          // 6×6 sudoku (2×3 blocks)
+          solution = [
+            [1, 2, 3, 4, 5, 6],
+            [4, 5, 6, 1, 2, 3],
+            [2, 3, 1, 5, 6, 4],
+            [5, 6, 4, 2, 3, 1],
+            [3, 1, 2, 6, 4, 5],
+            [6, 4, 5, 3, 1, 2],
+          ];
+          // Shuffle rows within 2-row blocks
+          if (rand() > 0.5) [solution[0], solution[1]] = [solution[1], solution[0]];
+          if (rand() > 0.5) [solution[2], solution[3]] = [solution[3], solution[2]];
+          if (rand() > 0.5) [solution[4], solution[5]] = [solution[5], solution[4]];
         }
 
-        // Create puzzle by hiding cells
+        // Hide cells based on difficulty + skill/luck
+        const actualHideRate = isHardRound ? effectiveHideRate + 0.1 : effectiveHideRate;
         const grid: (number | string | null)[][] = solution.map(row =>
-          row.map(val => rand() > 0.45 ? val : null)
+          row.map(val => rand() > actualHideRate ? val : null)
         );
+
+        const timeLimit = Math.round((size === 4 ? 120 : 240) * diffTuning.timeMult);
 
         puzzles.push({
           type: 'sudoku',
           size,
           grid,
-          clues: ['Fill 1-4 in each row, column, and 2x2 block'],
+          clues: [size === 4
+            ? `在每行、每列和每个2×2区块中填入1-${size}`
+            : `在每行、每列和每个2×3区块中填入1-${size}`],
           solution,
-          timeLimit: 120,
+          timeLimit,
         });
         break;
       }
 
       case 'connection': {
-        // 4 groups of 4 words
-        const groups = [
-          ['苹果', '香蕉', '橙子', '葡萄'],
-          ['红色', '蓝色', '绿色', '黄色'],
-          ['钢琴', '吉他', '鼓', '小提琴'],
-          ['春天', '夏天', '秋天', '冬天'],
-        ];
+        const themeOptions = CONNECTION_THEMES[choices.worldDifference] || CONNECTION_THEMES.colors_alive;
+        const themeData = pick(themeOptions);
 
-        // Flatten and shuffle for grid
+        // Use fewer groups for easier difficulty
+        const groupCount = Math.min(diffTuning.connectionGroups, themeData.groups.length);
+        const groups = themeData.groups.slice(0, groupCount);
+        const labels = themeData.labels.slice(0, groupCount);
+
+        // Flatten and shuffle
         const allWords = groups.flat().sort(() => rand() - 0.5);
         const grid: (number | string | null)[][] = [allWords];
-        const solution: (number | string)[][] = groups;
+
+        const timeLimit = Math.round((groupCount * 45) * diffTuning.timeMult);
 
         puzzles.push({
           type: 'connection',
-          size: 4,
+          size: groupCount,
           grid,
-          clues: ['水果', '颜色', '乐器', '季节'],
-          solution,
-          timeLimit: 180,
+          clues: labels,
+          solution: groups,
+          timeLimit,
         });
         break;
       }
 
       case 'sequence': {
-        // Number/pattern sequences
-        const seqTypes = [
-          { seq: [2, 4, 6, null, 10, null], sol: [2, 4, 6, 8, 10, 12], clue: 'Rule: +2' },
-          { seq: [1, 1, 2, 3, null, 8, null], sol: [1, 1, 2, 3, 5, 8, 13], clue: 'Fibonacci' },
-          { seq: [3, 6, null, 12, 15, null], sol: [3, 6, 9, 12, 15, 18], clue: 'Rule: +3' },
-          { seq: [1, 4, null, 16, null, 36], sol: [1, 4, 9, 16, 25, 36], clue: 'Perfect squares' },
-        ];
-        const chosen = seqTypes[Math.floor(rand() * seqTypes.length)];
+        const seqPool = isHardRound || choices.difficultyStyle === 'hardcore'
+          ? HARD_SEQS
+          : choices.difficultyStyle === 'relaxed'
+            ? EASY_SEQS
+            : MEDIUM_SEQS;
+
+        // Chaos can pull from harder pools
+        const effectivePool = chaosFactor > 0.5 && seqPool !== HARD_SEQS
+          ? [...seqPool, ...HARD_SEQS.slice(0, 2)]
+          : seqPool;
+
+        const chosen = pick(effectivePool);
+        const timeLimit = Math.round((chosen.seq.length * 12) * diffTuning.timeMult);
 
         puzzles.push({
           type: 'sequence',
@@ -2248,7 +2696,7 @@ function generatePuzzleGameData(
           grid: [chosen.seq],
           clues: [chosen.clue],
           solution: [chosen.sol],
-          timeLimit: 60,
+          timeLimit,
         });
         break;
       }
@@ -2263,45 +2711,154 @@ function generatePuzzleGameData(
 
 /**
  * Generate rhythm game data
+ *
+ * User choices consumed:
+ * - gamePace → base BPM
+ *     fast: 140-180 BPM (intense), medium: 110-140 BPM, slow: 80-110 BPM (chill)
+ * - difficultyStyle → note density, multi-notes, hold frequency
+ *     relaxed: sparse notes, no multi-hits, few holds
+ *     steady: moderate density, occasional doubles
+ *     hardcore: dense notes, frequent doubles/triples, many holds
+ *     rollercoaster: alternating sparse/dense sections
+ * - chaosLevel → scroll speed variance & pattern irregularity
+ *     low chaos: consistent patterns, high chaos: erratic patterns & speed changes
+ * - skillLuckRatio → timing window (more skill = stricter timing requirement encoded as scroll speed)
+ * - worldDifference → visual rhythm patterns (some patterns favor certain lanes)
+ * - gravity → scroll direction hint (normal: top-down, reverse: bottom-up encoded in scroll speed)
  */
 function generateRhythmGameData(
   rand: () => number,
   choices: UserChoices,
 ): RhythmGameData {
-  const bpm = 100 + Math.floor(rand() * 80); // 100-180 BPM
+  // --- BPM from gamePace ---
+  const BPM_RANGE: Record<string, [number, number]> = {
+    fast:   [140, 180],
+    medium: [110, 140],
+    slow:   [80, 110],
+  };
+  const [minBpm, maxBpm] = BPM_RANGE[choices.gamePace] || BPM_RANGE.medium;
+  const bpm = minBpm + Math.floor(rand() * (maxBpm - minBpm));
   const beatMs = 60000 / bpm;
   const laneCount = 4;
-  const songBeats = 60 + Math.floor(rand() * 40); // 60-100 beats
+
+  // --- Song length: fast pace = shorter but intense, slow = longer ---
+  const PACE_BEATS: Record<string, [number, number]> = {
+    fast:   [50, 70],
+    medium: [60, 90],
+    slow:   [80, 120],
+  };
+  const [minBeats, maxBeats] = PACE_BEATS[choices.gamePace] || PACE_BEATS.medium;
+  const songBeats = minBeats + Math.floor(rand() * (maxBeats - minBeats));
   const songDuration = songBeats * beatMs;
-  const scrollSpeed = 300 + Math.floor(rand() * 200);
 
+  // --- Scroll speed from skill/luck ---
+  const SCROLL_SPEED: Record<string, number> = {
+    pure_skill:  500, // Fast scroll = tight timing window
+    skill_heavy: 420,
+    balanced:    350,
+    luck_heavy:  280, // Slow scroll = more forgiving
+  };
+  let scrollSpeed = SCROLL_SPEED[choices.skillLuckRatio] || 350;
+
+  // Gravity hint: reverse gravity = slightly faster scroll (visual metaphor)
+  if (choices.gravity === 'reverse') scrollSpeed += 50;
+  if (choices.gravity === 'low') scrollSpeed -= 30;
+
+  // Chaos adds speed variance
+  const chaosSpeedVar = choices.chaosLevel * 20; // 0→0, 5→100
+  scrollSpeed += Math.floor((rand() - 0.5) * chaosSpeedVar);
+  scrollSpeed = Math.max(200, Math.min(600, scrollSpeed));
+
+  // --- Difficulty tuning ---
+  const DIFF_TUNING: Record<string, {
+    noteSpacing: number; // Min beats between notes (lower = denser)
+    multiNoteChance: number; // Chance of 2+ simultaneous notes
+    holdChance: number; // Chance of hold notes
+    maxSimultaneous: number;
+  }> = {
+    relaxed:       { noteSpacing: 1.5, multiNoteChance: 0.05, holdChance: 0.05, maxSimultaneous: 1 },
+    steady:        { noteSpacing: 1.0, multiNoteChance: 0.15, holdChance: 0.12, maxSimultaneous: 2 },
+    hardcore:      { noteSpacing: 0.5, multiNoteChance: 0.30, holdChance: 0.20, maxSimultaneous: 3 },
+    rollercoaster: { noteSpacing: 0.8, multiNoteChance: 0.20, holdChance: 0.15, maxSimultaneous: 2 },
+  };
+  const diffTuning = DIFF_TUNING[choices.difficultyStyle] || DIFF_TUNING.steady;
+
+  // --- World difference affects lane bias patterns ---
+  // Each world creates a distinct rhythmic "feel"
+  const LANE_PATTERNS: Record<string, number[][]> = {
+    colors_alive: [[0, 3], [1, 2], [0, 1, 2, 3], [2, 3]], // Spread out — colorful
+    sound_solid:  [[0, 1], [1, 2], [2, 3], [0, 3]],       // Adjacent pairs — resonant
+    memory_touch: [[0], [1], [2], [3], [0, 2], [1, 3]],   // Singles then pairs — reflective
+    time_uneven:  [[0, 1, 2], [1, 2, 3], [0], [3]],       // Uneven groupings — chaotic
+  };
+  const lanePatterns = LANE_PATTERNS[choices.worldDifference] || LANE_PATTERNS.colors_alive;
+  let patternIdx = 0;
+
+  // --- Generate notes ---
   const notes: RhythmNote[] = [];
-  let lastBeatTime = beatMs; // Start after one beat
+  let currentTime = beatMs * 2; // Start after 2 beats intro
+  let sectionBeat = 0;
 
-  for (let i = 0; i < songBeats; i++) {
-    const time = lastBeatTime + beatMs * (0.5 + rand() * 1.5);
-    lastBeatTime = time;
+  // For rollercoaster: alternate between sparse and dense sections
+  const sectionLength = 8; // beats per section
 
-    if (time >= songDuration - beatMs) break;
+  while (currentTime < songDuration - beatMs * 2) {
+    // Rollercoaster: toggle density every section
+    let spacing = diffTuning.noteSpacing;
+    let multiChance = diffTuning.multiNoteChance;
+    if (choices.difficultyStyle === 'rollercoaster') {
+      const sectionNum = Math.floor(sectionBeat / sectionLength);
+      if (sectionNum % 2 === 0) {
+        spacing *= 1.8; // Sparse section
+        multiChance *= 0.3;
+      } else {
+        spacing *= 0.6; // Dense section
+        multiChance *= 1.5;
+      }
+    }
 
-    // Sometimes place multiple notes on the same beat
-    const noteCount = rand() > 0.8 ? 2 : 1;
+    // Chaos adds timing jitter
+    const chaosJitter = choices.chaosLevel * 0.15; // 0→0, 5→0.75 beat jitter
+    const timeGap = beatMs * (spacing + rand() * spacing * 0.5 + (rand() - 0.5) * chaosJitter);
+    currentTime += timeGap;
+
+    if (currentTime >= songDuration - beatMs) break;
+
+    // Determine number of simultaneous notes
+    const noteCount = rand() < multiChance
+      ? Math.min(1 + Math.floor(rand() * diffTuning.maxSimultaneous), laneCount)
+      : 1;
+
+    // Pick lanes using world-themed patterns
+    const preferredLanes = lanePatterns[patternIdx % lanePatterns.length];
+    patternIdx++;
     const usedLanes = new Set<number>();
 
     for (let n = 0; n < noteCount; n++) {
-      let lane = Math.floor(rand() * laneCount);
-      while (usedLanes.has(lane)) lane = (lane + 1) % laneCount;
+      let lane: number;
+      if (n < preferredLanes.length && !usedLanes.has(preferredLanes[n])) {
+        lane = preferredLanes[n]; // Use pattern-preferred lane
+      } else {
+        lane = Math.floor(rand() * laneCount);
+        while (usedLanes.has(lane) && usedLanes.size < laneCount) {
+          lane = (lane + 1) % laneCount;
+        }
+      }
+      if (usedLanes.has(lane)) continue;
       usedLanes.add(lane);
 
-      const type: RhythmNote['type'] = rand() > 0.85 ? 'hold' : 'tap';
+      const isHold = rand() < diffTuning.holdChance;
+      const type: RhythmNote['type'] = isHold ? 'hold' : 'tap';
 
       notes.push({
-        time: Math.round(time),
+        time: Math.round(currentTime),
         lane,
         type,
         duration: type === 'hold' ? Math.round(beatMs * (1 + rand() * 2)) : undefined,
       });
     }
+
+    sectionBeat++;
   }
 
   // Sort by time
